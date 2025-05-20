@@ -4,17 +4,13 @@ from pyspark.sql.types import StructType, StructField, StringType, IntegerType
 from pyspark.sql import functions as F
 import sys
 
-# Inicializar SparkSession
 spark = SparkSession.builder.getOrCreate()
 
-# Obtener periodo desde argumento
 periodo = sys.argv[1]
 
-# Rutas a los archivos de entrada
 file_path = "s3://aypmd.sources/entrega2/construcciones/BRORGA2441NL_NAC_2024_1.gz"
 file_path_no_agricola = "s3://aypmd.sources/entrega2/no_agricola/BRORGA2441N_NAC_2024_2.gz"
 
-# Schemas
 schema = StructType([
     StructField("cod_com", IntegerType()),
     StructField("cod_mz", IntegerType()),
@@ -48,9 +44,7 @@ schema_no_agricola = StructType([
     StructField("superficie_total_terreno", IntegerType())
 ])
 
-# ---------------------
-# PROCESAR CONSTRUCCIONES
-# ---------------------
+
 df = spark.read.csv(
     file_path,
     schema=schema,
@@ -67,9 +61,7 @@ df = df.withColumn("periodo", F.lit(periodo))
 
 df.write    .option("partitionOverwriteMode", "dynamic")    .partitionBy("periodo")    .mode("overwrite")    .parquet("s3://grupo5-aypmd/entrega2/tablas_construcciones/")
 
-# ---------------------
-# PROCESAR NO AGRICOLA
-# ---------------------
+
 df_no_agricola = spark.read.csv(
     file_path_no_agricola,
     schema=schema_no_agricola,
@@ -96,9 +88,7 @@ df_no_agricola = df_no_agricola.join(
 
 df_no_agricola.write    .option("partitionOverwriteMode", "dynamic")    .partitionBy("periodo")    .mode("overwrite")    .parquet("s3://grupo5-aypmd/entrega2/tablas_no_agricola/")
 
-# ---------------------
-# PROCESAR NEXO BC
-# ---------------------
+
 df_no_agricola_raw = spark.read.csv(
     file_path_no_agricola,
     schema=schema_no_agricola,

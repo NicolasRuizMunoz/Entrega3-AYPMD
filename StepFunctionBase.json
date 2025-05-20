@@ -1,0 +1,111 @@
+{
+  "Comment": "Step Function completa para procesamiento automatizado",
+  "StartAt": "Get Periodo",
+  "States": {
+    "Get Periodo": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Output": "{% $states.result.Payload %}",
+      "Arguments": {
+        "FunctionName": "arn:aws:lambda:us-east-1:221010506654:function:get_periodo:$LATEST",
+        "Payload": "{% $states.input %}"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 1,
+          "MaxAttempts": 3,
+          "BackoffRate": 2,
+          "JitterStrategy": "FULL"
+        }
+      ],
+      "Next": "EMR CreateCluster",
+      "Assign": {
+        "periodo": "{% $states.result.Payload.body %}"
+      }
+    },
+    "EMR CreateCluster": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::elasticmapreduce:createCluster.sync",
+      "Arguments": {
+        "Name": "MyWorkflowCluster",
+        "ServiceRole": "EMR_DefaultRole",
+        "JobFlowRole": "EMR_EC2_DefaultRole",
+        "ReleaseLabel": "emr-7.0.0",
+        "Applications": [
+          { "Name": "Hive" },
+          { "Name": "Spark" },
+          { "Name": "Hadoop" },
+          { "Name": "JupyterHub" }
+        ],
+        "LogUri": "s3n://aws-logs-221010506654-us-east-1/elasticmapreduce/",
+        "VisibleToAllUsers": true,
+        "Instances": {
+          "KeepJobFlowAliveWhenNoSteps": true,
+          "InstanceFleets": [
+            {
+              "InstanceFleetType": "MASTER",
+              "Name": "MASTER",
+              "TargetOnDemandCapacity": 1,
+              "InstanceTypeConfigs": [{ "InstanceType": "m5.xlarge" }]
+            },
+            {
+              "InstanceFleetType": "CORE",
+              "Name": "CORE",
+              "TargetOnDemandCapacity": 2,
+              "InstanceTypeConfigs": [{ "InstanceType": "m5.xlarge" }]
+            }
+          ]
+        }
+      },
+      "Next": "Step One",
+      "Assign": {
+        "cluster_id": "{% $states.result.ClusterId %}"
+      }
+    },
+    "Step One": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::elasticmapreduce:addStep.sync",
+      "Arguments": {
+        "ClusterId": "{% $cluster_id %}",
+        "Step": {
+          "Name": "Run ETL Script",
+          "ActionOnFailure": "TERMINATE_CLUSTER",
+          "HadoopJarStep": {
+            "Jar": "command-runner.jar",
+            "Args": [
+              "spark-submit",
+              "--deploy-mode",
+              "cluster",
+              "s3://grupo20-aypmd/wiwi.py",
+              "{% $periodo %}"
+            ]
+          }
+        }
+      },
+      "Next": "EMR TerminateCluster"
+    },
+    "EMR TerminateCluster": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::elasticmapreduce:terminateCluster",
+      "Arguments": {
+        "ClusterId": "{% $cluster_id %}"
+      },
+      "Next": "Run Glue Crawler"
+    },
+    "Run Glue Crawler": {
+    "Type": "Task",
+    "Resource": "arn:aws:states:::aws-sdk:glue:startCrawler",
+    "Arguments": {
+        "Name": "grupo5-Entrega2.2.2"
+    },
+    "End": true
+    }
+  },
+  "QueryLanguage": "JSONata"
+}
