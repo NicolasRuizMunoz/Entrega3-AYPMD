@@ -82,7 +82,7 @@
               "spark-submit",
               "--deploy-mode",
               "cluster",
-              "s3://grupo20-aypmd/wiwi.py",
+              "s3://grupo5-aypmd/Entrega3/preprocesamiento.py",
               "{% $periodo %}"
             ]
           }
